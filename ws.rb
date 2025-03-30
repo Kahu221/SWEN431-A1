@@ -1,27 +1,77 @@
-# ws.rb
-def rot(stack)
-  a = stack.pop
-  b = stack.pop
-  c = stack.pop
-  stack.push(b, c, a)
+module Arithmetic
+  def self.handle_operation(stack, operator)
+    b = stack.pop
+    a = stack.pop
+    stack.push(a.send(operator, b))
+  end
 end
 
-def handle_boolean(stack, operator)
-  b = stack.pop
-  a = stack.pop
-  result = case operator
-           when '==' then a == b
-           when '!=' then a != b
-           when '>' then a > b
-           when '<' then a < b
-           when '>=' then a >= b
-           when '<=' then a <= b
-           when '<=>' then a <=> b
-           end
-  stack.push(result)
+
+
+module StackManipulation
+  def self.drop(stack)
+    stack.pop
+  end
+
+  def self.dup(stack)
+    stack.push(stack.last)
+  end
+
+  def self.swap(stack)
+    a, b = stack.pop(2)
+    stack.push(b, a)
+  end
+
+  def self.rot(stack)
+    a = stack.pop
+    b = stack.pop
+    c = stack.pop
+    stack.push(b, a, c)
+  end
+
+  def self.roll(stack)
+    n = stack.pop
+    elements_to_rotate = stack.pop(n)
+    stack.push(*elements_to_rotate.rotate)
+  end
+
+  def self.rolld(stack)
+    n = stack.pop
+    if n > 0 && n <= stack.length
+      elements_to_rotate = stack.pop(n)
+      stack.push(elements_to_rotate[-1], *elements_to_rotate[0..-2])
+    end
+  end
 end
 
-# Only run the main logic if the script is invoked directly
+module BooleanOperations
+  def self.if_else(stack)
+    condition = stack.pop
+    false_case = stack.pop
+    true_case = stack.pop
+    if condition != 0 && condition != false
+      stack.push(true_case)
+    else
+      stack.push(false_case)
+    end
+  end
+
+  def self.handle_comparison(stack, operator)
+    b = stack.pop
+    a = stack.pop
+    result = case operator
+             when '==' then a == b
+             when '!=' then a != b
+             when '>' then a > b
+             when '<' then a < b
+             when '>=' then a >= b
+             when '<=' then a <= b
+             when '<=>' then a <=> b
+             end
+    stack.push(result)
+  end
+end
+
 if __FILE__ == $0
   input_file = ARGV[0]
   unless input_file
@@ -29,64 +79,43 @@ if __FILE__ == $0
     exit 1
   end
 
-  # Extract input file name and create output file name
   digits = input_file.match(/input-(\d{3})\.txt/)[1]
-  output_file = File.join('output', "output-#{digits}.txt") # Write to output/ directory
+  output_file = File.join('output', "output-#{digits}.txt")
 
-  # Initialize stack
   stack = []
 
   begin
     # Read input file
     File.open(input_file, 'r') do |file|
       file.each_line do |line|
-        elements = line.scan(/"[^"]*"|\S+/) # Correctly extract quoted strings and standalone tokens
+        elements = line.scan(/"[^"]*"|\S+/) # extract quoted strings and standalone tokens
         elements.each do |element|
-
           case element
           when /\d+/ # Integer
             stack.push(element.to_i)
-          when '+', '-', '*', '/', '**', '%', '&', '|', '^', '<<', '>>' # Arithmetic, logical, and bitwise operators
-            b = stack.pop
-            a = stack.pop
-            stack.push(a.send(element, b))
-
+          when '+', '-', '*', '/', '**', '%', '&', '|', '^', '<<', '>>'
+            Arithmetic.handle_operation(stack, element)
           when 'DROP'
-            stack.pop
+            StackManipulation.drop(stack)
           when 'DUP'
-            stack.push(stack.last)
+            StackManipulation.dup(stack)
           when 'SWAP'
-            a, b = stack.pop(2)
-            stack.push(b, a)
+            StackManipulation.swap(stack)
           when 'ROT'
-            a, b, c = stack.pop(3)
-            stack.push(b, c, a)
+            StackManipulation.rot(stack)
           when 'ROLL'
-            n = stack.pop
-            elements_to_rotate = stack.pop(n)
-            stack.push(*elements_to_rotate.rotate)
+            StackManipulation.roll(stack)
           when 'ROLLD'
-            n = stack.pop
-            if n > 0 && n <= stack.length
-              elements_to_rotate = stack.pop(n)
-              stack.push(elements_to_rotate[-1], *elements_to_rotate[0..-2])
-            end
+            StackManipulation.rolld(stack)
           when 'IFELSE'
-            condition = stack.pop
-            false_case = stack.pop
-            true_case = stack.pop
-            if condition != 0 && condition != false
-              stack.push(true_case)
-            else
-              stack.push(false_case)
-            end
+            BooleanOperations.if_else(stack)
           when '==', '!=', '>', '<', '>=', '<=', '<=>'
-            handle_boolean(stack, element)
+            BooleanOperations.handle_comparison(stack, element)
           when 'true'
             stack.push(true)
           when 'false'
             stack.push(false)
-          when /\A".*"\z/ # String operand
+          when /\A".*"\z/ # String
             stack.push(element[1..-2]) # remove quotes
           else
             puts "Unknown command: #{element}"
@@ -104,7 +133,6 @@ if __FILE__ == $0
     end
 
   rescue => e
-    # Handle errors gracefully
     puts "Error: #{e.message}"
   end
 end
