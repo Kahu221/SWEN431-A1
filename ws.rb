@@ -1,8 +1,15 @@
 module Arithmetic
   def self.handle_operation(stack, operator)
-    b = stack.pop
-    a = stack.pop
-    stack.push(a.send(operator, b))
+    # Handle binary operations
+    if %w[+ - * / ** % & | ^ << >>].include?(operator)
+      b = stack.pop
+      a = stack.pop
+      stack.push(a.send(operator, b))
+    elsif operator == '!'
+      stack.push(!stack.pop)
+    elsif operator == '~' # One's complement
+      stack.push(~stack.pop)
+    end
   end
 end
 
@@ -93,7 +100,7 @@ if __FILE__ == $0
           case element
           when /\d+/ # Integer
             stack.push(element.to_i)
-          when '+', '-', '*', '/', '**', '%', '&', '|', '^', '<<', '>>'
+          when '+', '-', '*', '/', '**', '%', '&', '|', '^', '<<', '>>', '!', '~'
             Arithmetic.handle_operation(stack, element)
           when 'DROP'
             StackManipulation.drop(stack)
