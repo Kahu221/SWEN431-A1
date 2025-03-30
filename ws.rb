@@ -1,4 +1,25 @@
 # ws.rb
+def rot(stack)
+  a = stack.pop
+  b = stack.pop
+  c = stack.pop
+  stack.push(b, c, a)
+end
+
+def handle_boolean(stack, operator)
+  b = stack.pop
+  a = stack.pop
+  result = case operator
+           when '==' then a == b
+           when '!=' then a != b
+           when '>' then a > b
+           when '<' then a < b
+           when '>=' then a >= b
+           when '<=' then a <= b
+           when '<=>' then a <=> b
+           end
+  stack.push(result)
+end
 
 # Only run the main logic if the script is invoked directly
 if __FILE__ == $0
@@ -19,15 +40,17 @@ if __FILE__ == $0
     # Read input file
     File.open(input_file, 'r') do |file|
       file.each_line do |line|
-        elements = line.split
+        elements = line.scan(/"[^"]*"|\S+/) # Correctly extract quoted strings and standalone tokens
         elements.each do |element|
+
           case element
           when /\d+/ # Integer
             stack.push(element.to_i)
-          when '+', '-', '*', '/', '**', '%'
+          when '+', '-', '*', '/', '**', '%', '&', '|', '^', '<<', '>>' # Arithmetic, logical, and bitwise operators
             b = stack.pop
             a = stack.pop
             stack.push(a.send(element, b))
+
           when 'DROP'
             stack.pop
           when 'DUP'
@@ -58,26 +81,15 @@ if __FILE__ == $0
               stack.push(false_case)
             end
           when '==', '!=', '>', '<', '>=', '<=', '<=>'
-            b = stack.pop
-            a = stack.pop
-            stack.push(a.send(element, b))
-          when '&', '|', '^'  # Logical operators (and, or, xor)
-            b = stack.pop
-            a = stack.pop
-            stack.push(a.send(element, b))
+            handle_boolean(stack, element)
           when 'true'
             stack.push(true)
           when 'false'
             stack.push(false)
-          when '"', '"'  # String operands
-            string = stack.pop
-            stack.push(string)
-          when '<<', '>>'  # Bitshift operators
-            b = stack.pop
-            a = stack.pop
-            stack.push(a.send(element, b))
+          when /\A".*"\z/ # String operand
+            stack.push(element[1..-2]) # remove quotes
           else
-            # Handle unknown elements (optional)
+            puts "Unknown command: #{element}"
           end
         end
       end
@@ -85,8 +97,12 @@ if __FILE__ == $0
 
     # Write stack to output file
     File.open(output_file, 'w') do |file|
-      stack.each { |element| file.puts(element) }
+      stack.each do |element|
+        formatted_element = element.is_a?(String) ? "\"#{element}\"" : element
+        file.puts(formatted_element)
+      end
     end
+
   rescue => e
     # Handle errors gracefully
     puts "Error: #{e.message}"
