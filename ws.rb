@@ -15,7 +15,7 @@ if __FILE__ == $0
 
   # Initialize stack
   stack = []
-
+  #test
   begin
     # Read input file
     File.open(input_file, 'r') do |file|
