@@ -1,166 +1,158 @@
 require 'matrix'
 
+class MyVector < Vector
+  def *(other)
+    self.inner_product(other)
+  end
+
+  def x(other)
+    self.cross_product(other)
+  end
+end
+
 class Calculator
-  attr_accessor :stack, :tokens
-  def initialize(tokens)
-    @tokens = tokens
+  VECTOR_MATRIX_PATTERN = /(\[.+\])/
+  EVAL_PATTERN = /'.*/
+  LAMBDA_PATTERN = /({\s*\d+\s*\|\s*.*\s*})/
+
+  def initialize
     @stack = []
   end
 
-  def evaluate
-    while (element = @tokens.shift)
-      case element
-      when Integer
-        @stack.push(element)
-      when 'true'
-        @stack.push(true)
-      when 'false'
-        @stack.push(false)
-      when /\A".*"\z/
-        @stack.push(element[1..-2])
-      when '+', '-', '*', '/', '**', '%', '&', '|', '^', '<<', '>>', '!', '~'
-        Arithmetic.handle_operation(@stack, element)
-      when 'DROP'
-        StackManipulation.drop(@stack)
-      when 'DUP'
-        StackManipulation.dup(@stack)
-      when 'SWAP'
-        StackManipulation.swap(@stack)
-      when 'ROT'
-        StackManipulation.rot(@stack)
-      when 'ROLL'
-        StackManipulation.roll(@stack)
-      when 'ROLLD'
-        StackManipulation.rolld(@stack)
-      when 'IFELSE'
-        BooleanOperations.if_else(@stack)
-      when '==', '!=', '>', '<', '>=', '<=', '<=>'
-        BooleanOperations.handle_comparison(@stack, element)
-      else
-        puts "Unknown command: #{element}"
+  def rotate_last(elements, direction)
+    rotated = @stack.last(elements).rotate(direction)
+    @stack.pop(elements)
+    @stack.concat(rotated)
+  end
+
+  def process_element(element)
+    integer_pattern = /\A-?\d+\z/
+    float_pattern = /\A-?\d+\.\d+\z/
+    vector_pattern = /\[-?\d+(?:,\s*-?\d+)+\]/
+
+    case element
+    when VECTOR_MATRIX_PATTERN
+      array_elements = element.scan(vector_pattern).map do |a|
+        a.gsub(/[\[\]]/, '').split(/\s*,\s*/).map(&:to_i)
       end
+      @stack.push(array_elements.length > 1 ? Matrix.rows(array_elements) : MyVector.elements(array_elements.first))
+    when LAMBDA_PATTERN
+      matches = element.match(/{\s*(\d+)\s*\|\s*(.*?)\s*}/)
+      n = matches.captures[0].to_i
+      x = @stack.pop(n)
+      matches.captures[1].split.each do |command|
+        if command.match(/^x\d+$/)
+          index = command[1..].to_i
+          process_element(x[index])
+        elsif command == "SELF"
+          @stack.push(element)
+        else
+          command = Integer(command) rescue command
+          process_element(command)
+        end
+      end
+    when integer_pattern
+      @stack.push(element.to_i)
+    when float_pattern
+      @stack.push(element.to_f)
+    when EVAL_PATTERN
+      command = Integer(element[1..]) rescue element
+      @stack.push(command)
+    when "true"
+      @stack.push(true)
+    when "false"
+      @stack.push(false)
+    when '+', '-', '*', '/', '**', '%', '==', '!=', '>', '<', '>=', '<=', '<=>', '&', '|', '^', '<<', '>>', 'x'
+      b = @stack.pop
+      a = @stack.pop
+      @stack.push(a.send(element, b))
+    when '!', '~'
+      a = @stack.pop
+      @stack.push(a.send(element))
+    when 'SWAP'
+      a = @stack.pop
+      b = @stack.pop
+      @stack.push(a)
+      @stack.push(b)
+    when 'DROP'
+      @stack.pop
+    when 'DUP'
+      @stack.push(@stack.last)
+    when 'ROT'
+      rotate_last(3, 1)
+    when 'ROLL'
+      last = @stack.pop
+      rotate_last(last, 1)
+    when 'ROLLD'
+      last = @stack.pop
+      rotate_last(last, -1)
+    when 'IFELSE'
+      boolean = @stack.pop
+      a = @stack.pop
+      b = @stack.pop
+      if boolean
+        @stack.push(b)
+      else
+        @stack.push(a)
+      end
+    when 'TRANSP'
+      a = @stack.pop
+      @stack.push(a.transpose)
+    when 'EVAL'
+      command = @stack.pop
+      command.match?(LAMBDA_PATTERN) ? process_element(command) : process_element(command[1..])
+    else
+      @stack.push(element)
     end
-    @stack
   end
 
+  def run(input_file, output_file)
+    begin
+      File.open(input_file, 'r') do |file|
+        file.each_line do |line|
+          string_pattern = /"([^"]*)"/
+          operator_pattern = /(\S+)/
 
-  private
+          pattern = Regexp.union(string_pattern, VECTOR_MATRIX_PATTERN, LAMBDA_PATTERN, operator_pattern)
+          elements = line.scan(pattern).flatten.compact
+          elements.each do |element|
+            process_element(element)
+          end
+        end
+      end
 
-  def extract_lambda_tokens
-    # Logic to extract lambda tokens from the stack
-    []
-  end
-end
-
-module Arithmetic
-  def self.handle_operation(stack, operator)
-    # Handle binary operations
-    if %w[+ - * / ** % & | ^ << >>].include?(operator)
-      b = stack.pop
-      a = stack.pop
-
-      a = a.to_i if a.is_a?(Integer)
-      b = b.to_i if b.is_a?(Integer)
-      result = a.send(operator, b)
-      stack.push(result)
-    elsif operator == '!'
-      stack.push(!stack.pop)
-    elsif operator == '~' # One's complement
-      stack.push(~stack.pop)
+      File.open(output_file, 'w') do |file|
+        @stack.each do |element|
+          if element.is_a?(String)
+            if element.match?(EVAL_PATTERN)
+              file.puts element[1..]
+            else
+              file.puts("\"#{element}\"")
+            end
+          elsif element.is_a?(Vector) or element.is_a?(Matrix)
+            file.puts("#{element.to_a}")
+          else
+            file.puts(element)
+          end
+        end
+      end
+    rescue => e
+      puts "Error: #{e.message}"
     end
   end
 end
 
-module StackManipulation
-  def self.drop(stack)
-    stack.pop
-  end
-
-  def self.dup(stack)
-    stack.push(stack.last)
-  end
-
-  def self.swap(stack)
-    a, b = stack.pop(2)
-    stack.push(b, a)
-  end
-
-  def self.rot(stack)
-    a, b, c = stack.pop(3)
-    stack.push(b, c, a)
-  end
-
-  def self.roll(stack)
-    n = stack.pop
-    elements_to_rotate = stack.pop(n)
-    stack.push(*elements_to_rotate.rotate)
-  end
-
-  def self.rolld(stack)
-    n = stack.pop
-    elements_to_rotate = stack.pop(n)
-    stack.push(elements_to_rotate[-1], *elements_to_rotate[0..-2])
-  end
-end
-
-module BooleanOperations
-  def self.if_else(stack)
-    condition = stack.pop
-    false_case = stack.pop
-    true_case = stack.pop
-    stack.push(condition ? true_case : false_case)
-  end
-
-  def self.handle_comparison(stack, operator)
-    b = stack.pop
-    a = stack.pop
-    result = case operator
-             when '==' then a == b
-             when '!=' then a != b
-             when '>' then a > b
-             when '<' then a < b
-             when '>=' then a >= b
-             when '<=' then a <= b
-             when '<=>' then a <=> b
-             end
-    stack.push(result)
-  end
-end
-
-
+# Only run the main logic if the script is invoked directly
 if __FILE__ == $0
   input_file = ARGV[0]
   unless input_file
-    puts "Usage: ruby calculator.rb input-xxx.txt"
+    puts "Usage: ruby ws.rb input-xxx.txt"
     exit 1
   end
 
   digits = input_file.match(/input-(\d{3})\.txt/)[1]
   output_file = File.join('output', "output-#{digits}.txt")
 
-  tokens = []
-  begin
-    # Load the tokens from the input file
-    File.open(input_file, 'r') do |file|
-      file.each_line do |line|
-        line.scan(/"[^"]*"|\S+/).each do |token|
-          # Check if the token is an integer using a regular expression and convert if true
-          parsed_token = token.match?(/\A-?\d+\z/) ? token.to_i : token
-          tokens << parsed_token
-        end
-      end
-    end
-
-    calculator = Calculator.new(tokens)
-    stack = calculator.evaluate
-
-    File.open(output_file, 'w') do |file|
-      stack.each do |element|
-        formatted_element = element.is_a?(String) ? "\"#{element}\"" : element
-        file.puts(formatted_element)
-      end
-    end
-  rescue => e
-    puts "Error: #{e.message}"
-  end
+  calculator = Calculator.new
+  calculator.run(input_file, output_file)
 end
