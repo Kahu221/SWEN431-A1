@@ -1,16 +1,17 @@
 require 'matrix'
 
-class MyVector < Vector
-  def *(other)
-    self.inner_product(other)
+class ExpressionProcessor
+  attr_accessor :stack
+  class MyVector < Vector
+    def *(other)
+      self.inner_product(other)
+    end
+
+    def x(other)
+      self.cross_product(other)
+    end
   end
 
-  def x(other)
-    self.cross_product(other)
-  end
-end
-
-class Calculator
   VECTOR_MATRIX_PATTERN = /(\[.+\])/
   EVAL_PATTERN = /'.*/
   LAMBDA_PATTERN = /({\s*\d+\s*\|\s*.*\s*})/
@@ -58,10 +59,8 @@ class Calculator
     when EVAL_PATTERN
       command = Integer(element[1..]) rescue element
       @stack.push(command)
-    when "true"
-      @stack.push(true)
-    when "false"
-      @stack.push(false)
+    when "true", "false"
+      @stack.push(element == "true")
     when '+', '-', '*', '/', '**', '%', '==', '!=', '>', '<', '>=', '<=', '<=>', '&', '|', '^', '<<', '>>', 'x'
       b = @stack.pop
       a = @stack.pop
@@ -111,10 +110,6 @@ class Calculator
       process_element(element)
     end
   end
-
-  def get_result
-    @stack
-  end
 end
 
 def read_file(input_file)
@@ -124,7 +119,7 @@ def read_file(input_file)
       string_pattern = /"([^"]*)"/
       operator_pattern = /(\S+)/
 
-      pattern = Regexp.union(string_pattern, Calculator::VECTOR_MATRIX_PATTERN, Calculator::LAMBDA_PATTERN, operator_pattern)
+      pattern = Regexp.union(string_pattern, ExpressionProcessor::VECTOR_MATRIX_PATTERN, ExpressionProcessor::LAMBDA_PATTERN, operator_pattern)
       elements.concat(line.scan(pattern).flatten.compact)
     end
   end
@@ -135,7 +130,7 @@ def write_file(output_file, result)
   File.open(output_file, 'w') do |file|
     result.each do |element|
       if element.is_a?(String)
-        if element.match?(Calculator::EVAL_PATTERN)
+        if element.match?(ExpressionProcessor::EVAL_PATTERN)
           file.puts element[1..]
         else
           file.puts("\"#{element}\"")
@@ -161,9 +156,8 @@ if __FILE__ == $0
 
   elements = read_file(input_file)
 
-  calculator = Calculator.new
-  calculator.process_elements(elements)
+  expression_processor = ExpressionProcessor.new
+  expression_processor.process_elements(elements)
 
-  result = calculator.get_result
-  write_file(output_file, result)
+  write_file(output_file, expression_processor.stack)
 end
