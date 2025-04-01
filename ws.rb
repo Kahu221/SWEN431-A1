@@ -106,43 +106,49 @@ class Calculator
     end
   end
 
-  def run(input_file, output_file)
-    begin
-      File.open(input_file, 'r') do |file|
-        file.each_line do |line|
-          string_pattern = /"([^"]*)"/
-          operator_pattern = /(\S+)/
+  def process_elements(elements)
+    elements.each do |element|
+      process_element(element)
+    end
+  end
 
-          pattern = Regexp.union(string_pattern, VECTOR_MATRIX_PATTERN, LAMBDA_PATTERN, operator_pattern)
-          elements = line.scan(pattern).flatten.compact
-          elements.each do |element|
-            process_element(element)
-          end
-        end
-      end
+  def get_result
+    @stack
+  end
+end
 
-      File.open(output_file, 'w') do |file|
-        @stack.each do |element|
-          if element.is_a?(String)
-            if element.match?(EVAL_PATTERN)
-              file.puts element[1..]
-            else
-              file.puts("\"#{element}\"")
-            end
-          elsif element.is_a?(Vector) or element.is_a?(Matrix)
-            file.puts("#{element.to_a}")
-          else
-            file.puts(element)
-          end
+def read_file(input_file)
+  elements = []
+  File.open(input_file, 'r') do |file|
+    file.each_line do |line|
+      string_pattern = /"([^"]*)"/
+      operator_pattern = /(\S+)/
+
+      pattern = Regexp.union(string_pattern, Calculator::VECTOR_MATRIX_PATTERN, Calculator::LAMBDA_PATTERN, operator_pattern)
+      elements.concat(line.scan(pattern).flatten.compact)
+    end
+  end
+  elements
+end
+
+def write_file(output_file, result)
+  File.open(output_file, 'w') do |file|
+    result.each do |element|
+      if element.is_a?(String)
+        if element.match?(Calculator::EVAL_PATTERN)
+          file.puts element[1..]
+        else
+          file.puts("\"#{element}\"")
         end
+      elsif element.is_a?(Vector) or element.is_a?(Matrix)
+        file.puts("#{element.to_a}")
+      else
+        file.puts(element)
       end
-    rescue => e
-      puts "Error: #{e.message}"
     end
   end
 end
 
-# Only run the main logic if the script is invoked directly
 if __FILE__ == $0
   input_file = ARGV[0]
   unless input_file
@@ -153,6 +159,11 @@ if __FILE__ == $0
   digits = input_file.match(/input-(\d{3})\.txt/)[1]
   output_file = File.join('output', "output-#{digits}.txt")
 
+  elements = read_file(input_file)
+
   calculator = Calculator.new
-  calculator.run(input_file, output_file)
+  calculator.process_elements(elements)
+
+  result = calculator.get_result
+  write_file(output_file, result)
 end
