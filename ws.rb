@@ -2,9 +2,21 @@ require 'matrix'
 
 class ExpressionProcessor
   attr_accessor :stack
-  class MyVector < Vector
+  class MatrixVector < Vector
+    def self.from_string(element)
+      vector_pattern = /\[-?\d+(?:,\s*-?\d+)+\]/
+      array_elements = element.scan(vector_pattern).map do |a|
+        a.gsub(/[\[\]]/, '').split(/\s*,\s*/).map(&:to_i)
+      end
+      array_elements.length > 1 ? Matrix.rows(array_elements) : elements(array_elements.first)
+    end
+
     def *(other)
-      self.inner_product(other)
+      if other.is_a?(Vector)
+        self.inner_product(other)
+      else
+        super
+      end
     end
 
     def x(other)
@@ -26,41 +38,36 @@ class ExpressionProcessor
     @stack.concat(rotated)
   end
 
+  def process_lambda(lambda)
+    matches = lambda.match(/{\s*(\d+)\s*\|\s*(.*?)\s*}/)
+    n = matches.captures[0].to_i
+    x = @stack.pop(n)
+    matches.captures[1].split.each do |command|
+      if command.match(/^x\d+$/)
+        index = command[1..].to_i
+        process_element(x[index])
+      elsif command == "SELF"
+        @stack.push(lambda)
+      else
+        command = Integer(command) rescue command
+        process_element(command)
+      end
+    end
+  end
+
   def process_element(element)
     integer_pattern = /\A-?\d+\z/
     float_pattern = /\A-?\d+\.\d+\z/
-    vector_pattern = /\[-?\d+(?:,\s*-?\d+)+\]/
 
     case element
-    when VECTOR_MATRIX_PATTERN
-      array_elements = element.scan(vector_pattern).map do |a|
-        a.gsub(/[\[\]]/, '').split(/\s*,\s*/).map(&:to_i)
-      end
-      @stack.push(array_elements.length > 1 ? Matrix.rows(array_elements) : MyVector.elements(array_elements.first))
-    when LAMBDA_PATTERN
-      matches = element.match(/{\s*(\d+)\s*\|\s*(.*?)\s*}/)
-      n = matches.captures[0].to_i
-      x = @stack.pop(n)
-      matches.captures[1].split.each do |command|
-        if command.match(/^x\d+$/)
-          index = command[1..].to_i
-          process_element(x[index])
-        elsif command == "SELF"
-          @stack.push(element)
-        else
-          command = Integer(command) rescue command
-          process_element(command)
-        end
-      end
-    when integer_pattern
-      @stack.push(element.to_i)
-    when float_pattern
-      @stack.push(element.to_f)
+    when VECTOR_MATRIX_PATTERN then @stack.push(MatrixVector.from_string(element))
+    when LAMBDA_PATTERN then process_lambda(element)
+    when integer_pattern then @stack.push(element.to_i)
+    when float_pattern then @stack.push(element.to_f)
     when EVAL_PATTERN
       command = Integer(element[1..]) rescue element
       @stack.push(command)
-    when "true", "false"
-      @stack.push(element == "true")
+    when "true", "false" then @stack.push(element == "true")
     when '+', '-', '*', '/', '**', '%', '==', '!=', '>', '<', '>=', '<=', '<=>', '&', '|', '^', '<<', '>>', 'x'
       b = @stack.pop
       a = @stack.pop
@@ -73,13 +80,10 @@ class ExpressionProcessor
       b = @stack.pop
       @stack.push(a)
       @stack.push(b)
-    when 'DROP'
-      @stack.pop
-    when 'DUP'
-      @stack.push(@stack.last)
-    when 'ROT'
-      rotate_last(3, 1)
-    when 'ROLL'
+    when 'DROP' then @stack.pop
+    when 'DUP'then @stack.push(@stack.last)
+    when 'ROT' then rotate_last(3, 1)
+    when 'ROLL' then
       last = @stack.pop
       rotate_last(last, 1)
     when 'ROLLD'
