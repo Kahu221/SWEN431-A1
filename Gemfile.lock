@@ -2,6 +2,7 @@ GEM
   remote: https://rubygems.org/
   specs:
     diff-lcs (1.6.0)
+    matrix (0.4.2)
     rspec (3.13.0)
       rspec-core (~> 3.13.0)
       rspec-expectations (~> 3.13.0)
@@ -20,6 +21,7 @@ PLATFORMS
   arm64-darwin-24
 
 DEPENDENCIES
+  matrix
   rspec
 
 BUNDLED WITH

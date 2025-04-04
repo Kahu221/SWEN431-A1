@@ -3,7 +3,7 @@ require_relative '../lib/interpreter_helper'
 
 describe 'Stack Interpreter Debugging' do
   # Change this number to debug a specific test case
-  test_number = '110'
+  test_number = '260'
 
   # Define paths to input and expected files
   input_file = File.join(File.dirname(__FILE__), "../input/input-#{test_number}.txt")

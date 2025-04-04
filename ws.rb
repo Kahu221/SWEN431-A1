@@ -2,6 +2,7 @@ require 'matrix'
 
 class ExpressionProcessor
   attr_accessor :stack
+
   class MatrixVector < Vector
     def self.from_string(element)
       vector_pattern = /\[-?\d+(?:,\s*-?\d+)+\]/
@@ -81,7 +82,7 @@ class ExpressionProcessor
       @stack.push(a)
       @stack.push(b)
     when 'DROP' then @stack.pop
-    when 'DUP'then @stack.push(@stack.last)
+    when 'DUP' then @stack.push(@stack.last)
     when 'ROT' then rotate_last(3, 1)
     when 'ROLL' then
       last = @stack.pop
@@ -148,20 +149,23 @@ def write_file(output_file, result)
   end
 end
 
-if __FILE__ == $0
-  input_file = ARGV[0]
-  unless input_file
-    puts "Usage: ruby ws.rb input-xxx.txt"
-    exit 1
+begin
+  if __FILE__ == $0
+    input_file = ARGV[0]
+    unless input_file
+      puts "Usage: ruby ws.rb input-xxx.txt"
+      exit 1
+    end
+
+    digits = input_file.match(/input-(\d{3})\.txt/)[1]
+    output_file = File.join("output-#{digits}.txt")
+
+    elements = read_file(input_file)
+
+    expression_processor = ExpressionProcessor.new
+    expression_processor.process_elements(elements)
+
+    write_file(output_file, expression_processor.stack)
   end
-
-  digits = input_file.match(/input-(\d{3})\.txt/)[1]
-  output_file = File.join('output', "output-#{digits}.txt")
-
-  elements = read_file(input_file)
-
-  expression_processor = ExpressionProcessor.new
-  expression_processor.process_elements(elements)
-
-  write_file(output_file, expression_processor.stack)
+rescue StandardError => e
 end
